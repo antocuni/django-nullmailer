@@ -3,6 +3,7 @@ from django.core.mail.backends.base import BaseEmailBackend
 import threading
 import os
 import time
+import rfc822
 
 NULLMAILER_SPOOLDIR = getattr(settings, 'NULLMAILER_SPOOLDIR', '/var/spool/nullmailer')
 
@@ -19,6 +20,16 @@ def to_utf8(addr):
     if isinstance(addr, unicode):
         return addr.encode('utf-8')
     return addr
+
+def get_email_address(s):
+    """
+    Extract "foo@bar.com" from "Mr. Foo <foo@bar.com>"
+    """
+    # it seems that not all SMTP servers accept full names as
+    # senders/recipient. At least the gmail and aruba require to use only the
+    # "email address" part of the sender/recipient fields
+    name, email = rfc822.parseaddr(s)
+    return to_utf8(email)
 
 class EmailBackend(BaseEmailBackend):
 
@@ -37,8 +48,8 @@ class EmailBackend(BaseEmailBackend):
             cc = email_message.cc or []
             bcc = email_message.bcc or []
             recipients = to + cc + bcc
-            from_email = to_utf8(email_message.from_email)
-            to_lines = '\n'.join([to_utf8(addr) for addr in recipients])
+            from_email = get_email_address(email_message.from_email)
+            to_lines = '\n'.join([get_email_address(addr) for addr in recipients])
             msg = "%s\n%s\n\n%s" % ( from_email, to_lines, email_message.message().as_string())
             if self._send(msg, pid, tid):
                 num_sent += 1
